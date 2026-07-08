@@ -64,3 +64,13 @@ p {
   background: #ede9fe;
   color: #7c3aed;
 }
+
+.danger {
+  margin-top: 8px;
+  border: 0;
+  border-radius: 12px;
+  padding: 8px 12px;
+  background: #fee2e2;
+  color: #dc2626;
+  font-weight: bold;
+}
