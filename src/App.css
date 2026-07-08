@@ -198,3 +198,12 @@ button {
   background: #10b981;
   color: white;
 }
+
+.summary h3 {
+  margin-bottom: 0;
+}
+
+.list .row small {
+  color: #9ca3af;
+}
+

@@ -259,16 +259,8 @@ function Customers({ onSelect }: { onSelect: (name: string) => void }) {
     await load()
   }
 
-  function norm(v: string) {
-    return v
-      .replaceAll('ي', 'ی')
-      .replaceAll('ك', 'ک')
-      .replaceAll(' ', '')
-      .trim()
-  }
-
   const filtered = items.filter(item =>
-    norm(item.name).includes(norm(search))
+    item.name.trim().includes(search.trim())
   )
 
   return (
@@ -426,52 +418,24 @@ function CustomerDetails({ name, onBack }: { name: string; onBack: () => void })
   )
 }
 
-
 function History({ title }: { title: string }) {
-  const [filter, setFilter] = useState<'all' | 'today' | 'yesterday' | 'week' | 'month'>('today')
-  const [search, setSearch] = useState('')
+  const [filter, setFilter] = useState<'all' | 'today'>('all')
   const [items, setItems] = useState<Tx[]>([])
 
   useEffect(() => {
     load()
   }, [filter])
 
-  function startOfDay(d: Date) {
-    const x = new Date(d)
-    x.setHours(0, 0, 0, 0)
-    return x
-  }
-
   async function load() {
     let query = supabase
       .from('transactions')
       .select('*')
       .order('created_at', { ascending: false })
-      .limit(500)
-
-    const now = new Date()
+      .limit(100)
 
     if (filter === 'today') {
-      query = query.gte('created_at', startOfDay(now).toISOString())
-    }
-
-    if (filter === 'yesterday') {
-      const y = new Date(now)
-      y.setDate(y.getDate() - 1)
-      const start = startOfDay(y)
-      const end = startOfDay(now)
-      query = query.gte('created_at', start.toISOString()).lt('created_at', end.toISOString())
-    }
-
-    if (filter === 'week') {
-      const start = new Date(now)
-      start.setDate(now.getDate() - 7)
-      query = query.gte('created_at', start.toISOString())
-    }
-
-    if (filter === 'month') {
-      const start = new Date(now)
-      start.setDate(now.getDate() - 30)
+      const start = new Date()
+      start.setHours(0, 0, 0, 0)
       query = query.gte('created_at', start.toISOString())
     }
 
@@ -479,62 +443,17 @@ function History({ title }: { title: string }) {
     setItems(data || [])
   }
 
-  function norm(v: string) {
-    return v
-      .replaceAll('ي', 'ی')
-      .replaceAll('ك', 'ک')
-      .replaceAll(' ', '')
-      .trim()
-  }
-
-  const filtered = items.filter(item =>
-    norm(item.customer_name).includes(norm(search)) ||
-    norm(item.description || '').includes(norm(search))
-  )
-
-  const debt = filtered.filter(i => i.type === 'debt').reduce((s, i) => s + Number(i.amount), 0)
-  const payment = filtered.filter(i => i.type === 'payment').reduce((s, i) => s + Number(i.amount), 0)
-
-  function exportCsv() {
-    const header = ['نام مشتری', 'نوع', 'مبلغ', 'شرح', 'تاریخ']
-    const rows = filtered.map(i => [
-      i.customer_name,
-      i.type === 'debt' ? 'بدهی' : 'پرداخت',
-      String(i.amount),
-      i.description || '',
-      new Date(i.created_at).toLocaleString('fa-IR')
-    ])
-
-    const csv = [header, ...rows]
-      .map(row => row.map(cell => `"${String(cell).replaceAll('"', '""')}"`).join(','))
-      .join('\\n')
-
-    const blob = new Blob(['\\ufeff' + csv], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'saman-hesab-report.csv'
-    a.click()
-    URL.revokeObjectURL(url)
-  }
+  const debt = items.filter(i => i.type === 'debt').reduce((s, i) => s + Number(i.amount), 0)
+  const payment = items.filter(i => i.type === 'payment').reduce((s, i) => s + Number(i.amount), 0)
 
   return (
     <section className="form">
       <h2>{title}</h2>
 
       <div className="filterRow">
-        <button className={filter === 'today' ? 'activeFilter' : ''} onClick={() => setFilter('today')}>امروز</button>
-        <button className={filter === 'yesterday' ? 'activeFilter' : ''} onClick={() => setFilter('yesterday')}>دیروز</button>
-        <button className={filter === 'week' ? 'activeFilter' : ''} onClick={() => setFilter('week')}>هفته</button>
-        <button className={filter === 'month' ? 'activeFilter' : ''} onClick={() => setFilter('month')}>ماه</button>
         <button className={filter === 'all' ? 'activeFilter' : ''} onClick={() => setFilter('all')}>همه</button>
+        <button className={filter === 'today' ? 'activeFilter' : ''} onClick={() => setFilter('today')}>امروز</button>
       </div>
-
-      <input
-        value={search}
-        onChange={e => setSearch(e.target.value)}
-        placeholder="جستجو در گزارش..."
-      />
 
       <div className="summary">
         <p>بدهی: {money(debt)}</p>
@@ -542,17 +461,12 @@ function History({ title }: { title: string }) {
         <h3>مانده: {money(debt - payment)}</h3>
       </div>
 
-      <button className="save" onClick={exportCsv}>
-        خروجی Excel
-      </button>
-
       <div className="list">
-        {filtered.map(item => (
+        {items.map(item => (
           <div className="row" key={item.id}>
             <div>
               <strong>{item.customer_name}</strong>
               <p>{item.description || (item.type === 'debt' ? 'بدهی' : 'پرداخت')}</p>
-              <p>{new Date(item.created_at).toLocaleString('fa-IR')}</p>
             </div>
 
             <b className={item.type === 'debt' ? 'debtText' : 'payText'}>
