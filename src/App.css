@@ -74,3 +74,22 @@ p {
   color: #dc2626;
   font-weight: bold;
 }
+
+.editBtn {
+  margin-top: 8px;
+  margin-left: 6px;
+  border: 0;
+  border-radius: 12px;
+  padding: 8px 12px;
+  background: #dbeafe;
+  color: #2563eb;
+  font-weight: bold;
+}
+
+.editBox {
+  margin: 18px 0;
+  padding: 16px;
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow: 0 8px 20px rgba(0,0,0,.08);
+}

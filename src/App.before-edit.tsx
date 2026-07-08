@@ -139,26 +139,9 @@ function Customers({ onSelect }: { onSelect: (name: string) => void }) {
     setLoading(false)
   }
 
-  async function removeCustomer(name: string) {
-    if (!confirm('مشتری حذف شود؟ تمام تراکنش‌هایش هم حذف می‌شود.')) return
-
-    const { error } = await supabase
-      .from('transactions')
-      .delete()
-      .eq('customer_name', name)
-
-    if (error) {
-      alert('خطا در حذف مشتری')
-      return
-    }
-
-    await load()
-  }
-
   return (
     <section className="form">
       <h2>مشتری‌ها</h2>
-
       {loading && <p>در حال دریافت...</p>}
       <div className="list">
         {items.map(item => (
@@ -170,9 +153,6 @@ function Customers({ onSelect }: { onSelect: (name: string) => void }) {
             <b className={item.balance > 0 ? 'debtText' : 'payText'}>
               {item.balance.toLocaleString('fa-IR')} تومان
             </b>
-            <button className="danger" onClick={(e) => { e.stopPropagation(); removeCustomer(item.name) }}>
-              حذف مشتری
-            </button>
           </button>
         ))}
       </div>
@@ -183,9 +163,6 @@ function Customers({ onSelect }: { onSelect: (name: string) => void }) {
 function CustomerDetails({ name, onBack }: { name: string; onBack: () => void }) {
   const [items, setItems] = useState<Tx[]>([])
   const [loading, setLoading] = useState(true)
-  const [editingTx, setEditingTx] = useState<Tx | null>(null)
-  const [editAmount, setEditAmount] = useState('')
-  const [editDescription, setEditDescription] = useState('')
 
   useEffect(() => { load() }, [])
 
@@ -203,32 +180,6 @@ function CustomerDetails({ name, onBack }: { name: string; onBack: () => void })
   const debt = items.filter(i => i.type === 'debt').reduce((s, i) => s + i.amount, 0)
   const payment = items.filter(i => i.type === 'payment').reduce((s, i) => s + i.amount, 0)
   const balance = debt - payment
-
-  function startEdit(item: Tx) {
-    setEditingTx(item)
-    setEditAmount(String(item.amount))
-    setEditDescription(item.description || '')
-  }
-
-  async function saveEdit() {
-    if (!editingTx) return
-
-    const { error } = await supabase
-      .from('transactions')
-      .update({
-        amount: Number(editAmount.replaceAll(',', '').trim()),
-        description: editDescription
-      })
-      .eq('id', editingTx.id)
-
-    if (error) {
-      alert('خطا در ویرایش')
-      return
-    }
-
-    setEditingTx(null)
-    await load()
-  }
 
   async function removeTransaction(id: string) {
     if (!confirm('این تراکنش حذف شود؟')) return
@@ -256,16 +207,6 @@ function CustomerDetails({ name, onBack }: { name: string; onBack: () => void })
         <h3>مانده: {balance.toLocaleString('fa-IR')} تومان</h3>
       </div>
 
-      {editingTx && (
-        <div className="editBox">
-          <h3>ویرایش تراکنش</h3>
-          <input value={editAmount} onChange={e => setEditAmount(e.target.value)} placeholder="مبلغ" inputMode="numeric" />
-          <input value={editDescription} onChange={e => setEditDescription(e.target.value)} placeholder="شرح" />
-          <button className="save" onClick={saveEdit}>ذخیره ویرایش</button>
-          <button className="back small" onClick={() => setEditingTx(null)}>لغو</button>
-        </div>
-      )}
-
       {loading && <p>در حال دریافت...</p>}
       <div className="list">
         {items.map(item => (
@@ -278,7 +219,6 @@ function CustomerDetails({ name, onBack }: { name: string; onBack: () => void })
               <b className={item.type === 'debt' ? 'debtText' : 'payText'}>
                 {item.type === 'debt' ? '+' : '-'} {item.amount.toLocaleString('fa-IR')} تومان
               </b>
-              <button className="editBtn" onClick={() => startEdit(item)}>ویرایش</button>
               <button className="danger" onClick={() => removeTransaction(item.id)}>حذف</button>
             </div>
           </div>

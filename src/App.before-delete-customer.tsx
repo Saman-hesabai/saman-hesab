@@ -139,22 +139,6 @@ function Customers({ onSelect }: { onSelect: (name: string) => void }) {
     setLoading(false)
   }
 
-  async function removeCustomer(name: string) {
-    if (!confirm('مشتری حذف شود؟ تمام تراکنش‌هایش هم حذف می‌شود.')) return
-
-    const { error } = await supabase
-      .from('transactions')
-      .delete()
-      .eq('customer_name', name)
-
-    if (error) {
-      alert('خطا در حذف مشتری')
-      return
-    }
-
-    await load()
-  }
-
   return (
     <section className="form">
       <h2>مشتری‌ها</h2>
@@ -170,9 +154,6 @@ function Customers({ onSelect }: { onSelect: (name: string) => void }) {
             <b className={item.balance > 0 ? 'debtText' : 'payText'}>
               {item.balance.toLocaleString('fa-IR')} تومان
             </b>
-            <button className="danger" onClick={(e) => { e.stopPropagation(); removeCustomer(item.name) }}>
-              حذف مشتری
-            </button>
           </button>
         ))}
       </div>
