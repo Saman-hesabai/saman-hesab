@@ -181,22 +181,6 @@ function CustomerDetails({ name, onBack }: { name: string; onBack: () => void })
   const payment = items.filter(i => i.type === 'payment').reduce((s, i) => s + i.amount, 0)
   const balance = debt - payment
 
-  async function removeTransaction(id: string) {
-    if (!confirm('این تراکنش حذف شود؟')) return
-
-    const { error } = await supabase
-      .from('transactions')
-      .delete()
-      .eq('id', id)
-
-    if (error) {
-      alert('خطا در حذف')
-      return
-    }
-
-    await load()
-  }
-
   return (
     <section className="form">
       <button className="back small" onClick={onBack}>برگشت به مشتری‌ها</button>
@@ -215,12 +199,9 @@ function CustomerDetails({ name, onBack }: { name: string; onBack: () => void })
               <strong>{item.type === 'debt' ? 'بدهی' : 'پرداخت'}</strong>
               <p>{item.description || 'بدون شرح'}</p>
             </div>
-            <div>
-              <b className={item.type === 'debt' ? 'debtText' : 'payText'}>
-                {item.type === 'debt' ? '+' : '-'} {item.amount.toLocaleString('fa-IR')} تومان
-              </b>
-              <button className="danger" onClick={() => removeTransaction(item.id)}>حذف</button>
-            </div>
+            <b className={item.type === 'debt' ? 'debtText' : 'payText'}>
+              {item.type === 'debt' ? '+' : '-'} {item.amount.toLocaleString('fa-IR')} تومان
+            </b>
           </div>
         ))}
       </div>
