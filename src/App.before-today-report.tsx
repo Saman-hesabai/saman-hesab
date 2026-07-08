@@ -139,10 +139,6 @@ function TransactionForm({ title, type }: { title: string; type: 'debt' | 'payme
   return (
     <section className="form">
       <h2>{title}</h2>
-      <div className="filterRow">
-        <button className={filter === 'all' ? 'activeFilter' : ''} onClick={() => { setFilter('all'); setTimeout(load, 0) }}>همه</button>
-        <button className={filter === 'today' ? 'activeFilter' : ''} onClick={() => { setFilter('today'); setTimeout(load, 0) }}>امروز</button>
-      </div>
       <input value={name} onChange={e => setName(e.target.value)} placeholder="نام مشتری" />
       <input value={amount} onChange={e => setAmount(e.target.value)} placeholder="مبلغ به تومان" inputMode="numeric" />
       <input value={description} onChange={e => setDescription(e.target.value)} placeholder="شرح اختیاری" />
@@ -358,43 +354,17 @@ function CustomerDetails({ name, onBack }: { name: string; onBack: () => void })
 }
 
 function History({ title }: { title: string }) {
-  const [filter, setFilter] = useState('all')
   const [items, setItems] = useState<Tx[]>([])
   useEffect(() => { load() }, [])
 
   async function load() {
-    let query = supabase.from('transactions').select('*').order('created_at', { ascending: false }).limit(100)
-
-    if (filter === 'today') {
-      const start = new Date()
-      start.setHours(0, 0, 0, 0)
-      query = query.gte('created_at', start.toISOString())
-    }
-
-    const { data } = await query
+    const { data } = await supabase.from('transactions').select('*').order('created_at', { ascending: false }).limit(50)
     setItems(data || [])
   }
 
   return (
     <section className="form">
       <h2>{title}</h2>
-
-      <div className="filterRow">
-        <button
-          className={filter === 'all' ? 'activeFilter' : ''}
-          onClick={() => { setFilter('all'); setTimeout(load, 0) }}
-        >
-          همه
-        </button>
-
-        <button
-          className={filter === 'today' ? 'activeFilter' : ''}
-          onClick={() => { setFilter('today'); setTimeout(load, 0) }}
-        >
-          امروز
-        </button>
-      </div>
-
       <div className="list">
         {items.map(item => (
           <div className="row" key={item.id}>

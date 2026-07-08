@@ -21,31 +21,6 @@ type CustomerBalance = {
 
 function App() {
   const [page, setPage] = useState<Page>('home')
-  const [stats, setStats] = useState({ customers: 0, debt: 0, payment: 0, balance: 0 })
-
-  useEffect(() => {
-    loadStats()
-  }, [])
-
-  async function loadStats() {
-    const { data } = await supabase.from('transactions').select('customer_name,type,amount')
-    const names = new Set<string>()
-    let debt = 0
-    let payment = 0
-
-    ;(data || []).forEach((tx: any) => {
-      names.add(tx.customer_name)
-      if (tx.type === 'debt') debt += Number(tx.amount)
-      if (tx.type === 'payment') payment += Number(tx.amount)
-    })
-
-    setStats({
-      customers: names.size,
-      debt,
-      payment,
-      balance: debt - payment
-    })
-  }
   const [selectedCustomer, setSelectedCustomer] = useState<string | null>(null)
 
   function goHome() {
@@ -63,13 +38,6 @@ function App() {
             <h1>سامان حساب</h1>
             <p>دفتر نسیه هوشمند فروشگاه</p>
           </header>
-          <section className="stats">
-            <div>👥 مشتری‌ها: <b>{stats.customers.toLocaleString('fa-IR')}</b></div>
-            <div>💰 بدهی کل: <b>{stats.debt.toLocaleString('fa-IR')} تومان</b></div>
-            <div>💵 پرداخت کل: <b>{stats.payment.toLocaleString('fa-IR')} تومان</b></div>
-            <div>📈 مانده کل: <b>{stats.balance.toLocaleString('fa-IR')} تومان</b></div>
-          </section>
-
           <section className="grid">
             <button className="card red" onClick={() => setPage('debt')}>ثبت بدهی</button>
             <button className="card green" onClick={() => setPage('payment')}>ثبت پرداخت</button>
@@ -139,10 +107,6 @@ function TransactionForm({ title, type }: { title: string; type: 'debt' | 'payme
   return (
     <section className="form">
       <h2>{title}</h2>
-      <div className="filterRow">
-        <button className={filter === 'all' ? 'activeFilter' : ''} onClick={() => { setFilter('all'); setTimeout(load, 0) }}>همه</button>
-        <button className={filter === 'today' ? 'activeFilter' : ''} onClick={() => { setFilter('today'); setTimeout(load, 0) }}>امروز</button>
-      </div>
       <input value={name} onChange={e => setName(e.target.value)} placeholder="نام مشتری" />
       <input value={amount} onChange={e => setAmount(e.target.value)} placeholder="مبلغ به تومان" inputMode="numeric" />
       <input value={description} onChange={e => setDescription(e.target.value)} placeholder="شرح اختیاری" />
@@ -155,7 +119,6 @@ function TransactionForm({ title, type }: { title: string; type: 'debt' | 'payme
 function Customers({ onSelect }: { onSelect: (name: string) => void }) {
   const [items, setItems] = useState<CustomerBalance[]>([])
   const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
 
   useEffect(() => { load() }, [])
 
@@ -174,30 +137,6 @@ function Customers({ onSelect }: { onSelect: (name: string) => void }) {
 
     setItems(Array.from(map.values()).sort((a, b) => b.balance - a.balance))
     setLoading(false)
-  }
-
-  async function renameCustomer(oldName: string) {
-    const newName = prompt('نام جدید مشتری را وارد کن:', oldName)
-    if (!newName || !newName.trim() || newName.trim() === oldName) return
-
-    const cleanName = newName.trim()
-
-    await supabase
-      .from('customers')
-      .update({ name: cleanName })
-      .eq('name', oldName)
-
-    const { error } = await supabase
-      .from('transactions')
-      .update({ customer_name: cleanName })
-      .eq('customer_name', oldName)
-
-    if (error) {
-      alert('خطا در ویرایش مشتری')
-      return
-    }
-
-    await load()
   }
 
   async function removeCustomer(name: string) {
@@ -219,15 +158,10 @@ function Customers({ onSelect }: { onSelect: (name: string) => void }) {
   return (
     <section className="form">
       <h2>مشتری‌ها</h2>
-      <input
-        value={search}
-        onChange={e => setSearch(e.target.value)}
-        placeholder="جستجوی مشتری..."
-      />
 
       {loading && <p>در حال دریافت...</p>}
       <div className="list">
-        {items.filter(item => item.name.includes(search.trim())).map(item => (
+        {items.map(item => (
           <button className="row rowButton" key={item.name} onClick={() => onSelect(item.name)}>
             <div>
               <strong>{item.name}</strong>
@@ -236,9 +170,6 @@ function Customers({ onSelect }: { onSelect: (name: string) => void }) {
             <b className={item.balance > 0 ? 'debtText' : 'payText'}>
               {item.balance.toLocaleString('fa-IR')} تومان
             </b>
-            <button className="editBtn" onClick={(e) => { e.stopPropagation(); renameCustomer(item.name) }}>
-              ویرایش نام
-            </button>
             <button className="danger" onClick={(e) => { e.stopPropagation(); removeCustomer(item.name) }}>
               حذف مشتری
             </button>
@@ -358,43 +289,17 @@ function CustomerDetails({ name, onBack }: { name: string; onBack: () => void })
 }
 
 function History({ title }: { title: string }) {
-  const [filter, setFilter] = useState('all')
   const [items, setItems] = useState<Tx[]>([])
   useEffect(() => { load() }, [])
 
   async function load() {
-    let query = supabase.from('transactions').select('*').order('created_at', { ascending: false }).limit(100)
-
-    if (filter === 'today') {
-      const start = new Date()
-      start.setHours(0, 0, 0, 0)
-      query = query.gte('created_at', start.toISOString())
-    }
-
-    const { data } = await query
+    const { data } = await supabase.from('transactions').select('*').order('created_at', { ascending: false }).limit(50)
     setItems(data || [])
   }
 
   return (
     <section className="form">
       <h2>{title}</h2>
-
-      <div className="filterRow">
-        <button
-          className={filter === 'all' ? 'activeFilter' : ''}
-          onClick={() => { setFilter('all'); setTimeout(load, 0) }}
-        >
-          همه
-        </button>
-
-        <button
-          className={filter === 'today' ? 'activeFilter' : ''}
-          onClick={() => { setFilter('today'); setTimeout(load, 0) }}
-        >
-          امروز
-        </button>
-      </div>
-
       <div className="list">
         {items.map(item => (
           <div className="row" key={item.id}>

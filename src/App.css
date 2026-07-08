@@ -93,3 +93,40 @@ p {
   background: #ffffff;
   box-shadow: 0 8px 20px rgba(0,0,0,.08);
 }
+
+.stats {
+  display: grid;
+  gap: 10px;
+  margin: 18px 0 24px;
+}
+
+.stats div {
+  background: #ffffff;
+  padding: 14px 16px;
+  border-radius: 18px;
+  box-shadow: 0 6px 16px rgba(0,0,0,.06);
+  font-size: 16px;
+}
+
+.stats b {
+  color: #111827;
+}
+
+.filterRow {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.filterRow button {
+  border: 0;
+  border-radius: 12px;
+  padding: 10px 14px;
+  background: #e5e7eb;
+  font-weight: bold;
+}
+
+.filterRow .activeFilter {
+  background: #10b981;
+  color: white;
+}
