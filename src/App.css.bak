@@ -1,0 +1,132 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: sans-serif;
+  background: #f6f7fb;
+}
+
+.app {
+  min-height: 100vh;
+  padding: 28px 18px;
+  color: #1f2937;
+}
+
+header {
+  margin-bottom: 30px;
+}
+
+h1 {
+  margin: 0;
+  font-size: 38px;
+  color: #10b981;
+}
+
+p {
+  margin-top: 8px;
+  color: #6b7280;
+  font-size: 18px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+
+.card {
+  border: 0;
+  border-radius: 28px;
+  min-height: 145px;
+  font-size: 23px;
+  font-weight: bold;
+  box-shadow: 0 8px 20px rgba(0,0,0,.08);
+}
+
+.red {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.green {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.blue {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+.purple {
+  background: #ede9fe;
+  color: #7c3aed;
+}
+
+.danger {
+  margin-top: 8px;
+  border: 0;
+  border-radius: 12px;
+  padding: 8px 12px;
+  background: #fee2e2;
+  color: #dc2626;
+  font-weight: bold;
+}
+
+.editBtn {
+  margin-top: 8px;
+  margin-left: 6px;
+  border: 0;
+  border-radius: 12px;
+  padding: 8px 12px;
+  background: #dbeafe;
+  color: #2563eb;
+  font-weight: bold;
+}
+
+.editBox {
+  margin: 18px 0;
+  padding: 16px;
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow: 0 8px 20px rgba(0,0,0,.08);
+}
+
+.stats {
+  display: grid;
+  gap: 10px;
+  margin: 18px 0 24px;
+}
+
+.stats div {
+  background: #ffffff;
+  padding: 14px 16px;
+  border-radius: 18px;
+  box-shadow: 0 6px 16px rgba(0,0,0,.06);
+  font-size: 16px;
+}
+
+.stats b {
+  color: #111827;
+}
+
+.filterRow {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.filterRow button {
+  border: 0;
+  border-radius: 12px;
+  padding: 10px 14px;
+  background: #e5e7eb;
+  font-weight: bold;
+}
+
+.filterRow .activeFilter {
+  background: #10b981;
+  color: white;
+}
