@@ -3,10 +3,8 @@ import { supabase } from './lib/supabase'
 import './App.css'
 
 type Page = 'home' | 'debt' | 'payment' | 'customers' | 'today'
-
 type Tx = {
   id: string
-  customer_id: string | null
   customer_name: string
   type: 'debt' | 'payment'
   amount: number
@@ -15,31 +13,22 @@ type Tx = {
 }
 
 type CustomerBalance = {
-  id?: string
   name: string
   debt: number
   payment: number
   balance: number
 }
 
-function money(n: number) {
-  return Number(n || 0).toLocaleString('fa-IR') + ' تومان'
-}
-
 function App() {
   const [page, setPage] = useState<Page>('home')
   const [stats, setStats] = useState({ customers: 0, debt: 0, payment: 0, balance: 0 })
-  const [selectedCustomer, setSelectedCustomer] = useState<string | null>(null)
 
   useEffect(() => {
     loadStats()
   }, [])
 
   async function loadStats() {
-    const { data } = await supabase
-      .from('transactions')
-      .select('customer_name,type,amount')
-
+    const { data } = await supabase.from('transactions').select('customer_name,type,amount')
     const names = new Set<string>()
     let debt = 0
     let payment = 0
@@ -54,23 +43,20 @@ function App() {
       customers: names.size,
       debt,
       payment,
-      balance: debt - payment,
+      balance: debt - payment
     })
   }
 
+  const [selectedCustomer, setSelectedCustomer] = useState<string | null>(null)
+const [search, setSearch] = useState('')
   function goHome() {
     setPage('home')
     setSelectedCustomer(null)
-    loadStats()
   }
 
   return (
     <main className="app" dir="rtl">
-      {page !== 'home' && (
-        <button className="back" onClick={goHome}>
-          بازگشت
-        </button>
-      )}
+      {page !== 'home' && <button className="back" onClick={goHome}>بازگشت</button>}
 
       {page === 'home' && (
         <>
@@ -78,14 +64,17 @@ function App() {
             <h1>سامان حساب</h1>
             <p>دفتر نسیه هوشمند فروشگاه</p>
           </header>
-
           <section className="stats">
             <div>👥 مشتری‌ها: <b>{stats.customers.toLocaleString('fa-IR')}</b></div>
-            <div>💰 بدهی کل: <b>{money(stats.debt)}</b></div>
-            <div>💵 پرداخت کل: <b>{money(stats.payment)}</b></div>
-            <div>📈 مانده کل: <b>{money(stats.balance)}</b></div>
+            <div>💰 بدهی کل: <b>{stats.debt.toLocaleString('fa-IR')} تومان</b></div>
+            <div>💵 پرداخت کل: <b>{stats.payment.toLocaleString('fa-IR')} تومان</b></div>
+            <div>📈 مانده کل: <b>{stats.balance.toLocaleString('fa-IR')} تومان</b></div>
           </section>
-
+<input
+  value={search}
+  onChange={e => setSearch(e.target.value)}
+  placeholder="جستجوی مشتری..."
+/>
           <section className="grid">
             <button className="card red" onClick={() => setPage('debt')}>ثبت بدهی</button>
             <button className="card green" onClick={() => setPage('payment')}>ثبت پرداخت</button>
@@ -95,31 +84,20 @@ function App() {
         </>
       )}
 
-      {page === 'debt' && <TransactionForm title="ثبت بدهی" type="debt" onSaved={loadStats} />}
-      {page === 'payment' && <TransactionForm title="ثبت پرداخت" type="payment" onSaved={loadStats} />}
-
+      {page === 'debt' && <TransactionForm title="ثبت بدهی" type="debt" />}
+      {page === 'payment' && <TransactionForm title="ثبت پرداخت" type="payment" />}
       {page === 'customers' && !selectedCustomer && (
         <Customers onSelect={setSelectedCustomer} />
       )}
-
       {page === 'customers' && selectedCustomer && (
         <CustomerDetails name={selectedCustomer} onBack={() => setSelectedCustomer(null)} />
       )}
-
-      {page === 'today' && <History title="تاریخچه" />}
+      {page === 'today' && <History title="تاریخچه ثبت‌ها" />}
     </main>
   )
 }
 
-function TransactionForm({
-  title,
-  type,
-  onSaved,
-}: {
-  title: string
-  type: 'debt' | 'payment'
-  onSaved: () => void
-}) {
+function TransactionForm({ title, type }: { title: string; type: 'debt' | 'payment' }) {
   const [name, setName] = useState('')
   const [amount, setAmount] = useState('')
   const [description, setDescription] = useState('')
@@ -131,7 +109,7 @@ function TransactionForm({
     const cleanAmount = Number(amount.replaceAll(',', '').trim())
 
     if (!cleanName || !cleanAmount) {
-      setMessage('نام مشتری و مبلغ را وارد کن')
+      setMessage('نام مشتری و مبلغ را وارد کن.')
       return
     }
 
@@ -151,29 +129,28 @@ function TransactionForm({
       customer_name: cleanName,
       type,
       amount: cleanAmount,
-      description,
+      description
     })
 
-    if (error) {
-      setMessage('خطا: ' + error.message)
-      return
+    if (error) setMessage('خطا: ' + error.message)
+    else {
+      setMessage('ثبت شد ✅')
+      setName('')
+      setAmount('')
+      setDescription('')
     }
-
-    setMessage('ثبت شد ✅')
-    setName('')
-    setAmount('')
-    setDescription('')
-    onSaved()
   }
 
   return (
     <section className="form">
       <h2>{title}</h2>
-
+      <div className="filterRow">
+        <button className={filter === 'all' ? 'activeFilter' : ''} onClick={() => { setFilter('all'); setTimeout(load, 0) }}>همه</button>
+        <button className={filter === 'today' ? 'activeFilter' : ''} onClick={() => { setFilter('today'); setTimeout(load, 0) }}>امروز</button>
+      </div>
       <input value={name} onChange={e => setName(e.target.value)} placeholder="نام مشتری" />
-      <input value={amount} onChange={e => setAmount(e.target.value)} placeholder="مبلغ" inputMode="numeric" />
-      <input value={description} onChange={e => setDescription(e.target.value)} placeholder="شرح" />
-
+      <input value={amount} onChange={e => setAmount(e.target.value)} placeholder="مبلغ به تومان" inputMode="numeric" />
+      <input value={description} onChange={e => setDescription(e.target.value)} placeholder="شرح اختیاری" />
       <button className="save" onClick={save}>ثبت</button>
       {message && <p>{message}</p>}
     </section>
@@ -185,25 +162,15 @@ function Customers({ onSelect }: { onSelect: (name: string) => void }) {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
 
-  useEffect(() => {
-    load()
-  }, [])
+  useEffect(() => { load() }, [])
 
   async function load() {
-    setLoading(true)
-
-    const { data } = await supabase
-      .from('transactions')
-      .select('customer_name,type,amount')
-
+    const { data } = await supabase.from('transactions').select('customer_name,type,amount')
     const map = new Map<string, CustomerBalance>()
 
     ;(data || []).forEach((tx: any) => {
       const name = tx.customer_name
-      if (!map.has(name)) {
-        map.set(name, { name, debt: 0, payment: 0, balance: 0 })
-      }
-
+      if (!map.has(name)) map.set(name, { name, debt: 0, payment: 0, balance: 0 })
       const c = map.get(name)!
       if (tx.type === 'debt') c.debt += Number(tx.amount)
       if (tx.type === 'payment') c.payment += Number(tx.amount)
@@ -246,11 +213,6 @@ function Customers({ onSelect }: { onSelect: (name: string) => void }) {
       .delete()
       .eq('customer_name', name)
 
-    await supabase
-      .from('customers')
-      .delete()
-      .eq('name', name)
-
     if (error) {
       alert('خطا در حذف مشتری')
       return
@@ -259,14 +221,9 @@ function Customers({ onSelect }: { onSelect: (name: string) => void }) {
     await load()
   }
 
-  const filtered = items.filter(item =>
-    item.name.trim().includes(search.trim())
-  )
-
   return (
     <section className="form">
       <h2>مشتری‌ها</h2>
-
       <input
         value={search}
         onChange={e => setSearch(e.target.value)}
@@ -274,25 +231,23 @@ function Customers({ onSelect }: { onSelect: (name: string) => void }) {
       />
 
       {loading && <p>در حال دریافت...</p>}
-
       <div className="list">
-        {filtered.map(item => (
-          <div className="row" key={item.name}>
-            <button className="rowButton" onClick={() => onSelect(item.name)}>
-              <div>
-                <strong>{item.name}</strong>
-                <p>بدهی: {money(item.debt)} | پرداخت: {money(item.payment)}</p>
-              </div>
-              <b className={item.balance > 0 ? 'debtText' : 'payText'}>
-                {money(item.balance)}
-              </b>
-            </button>
-
-            <div className="actions">
-              <button className="editBtn" onClick={() => renameCustomer(item.name)}>ویرایش نام</button>
-              <button className="danger" onClick={() => removeCustomer(item.name)}>حذف مشتری</button>
+        {items.filter(item => item.name.includes(search.trim())).map(item => (
+          <button className="row rowButton" key={item.name} onClick={() => onSelect(item.name)}>
+            <div>
+              <strong>{item.name}</strong>
+              <p>بدهی: {item.debt.toLocaleString('fa-IR')} | پرداخت: {item.payment.toLocaleString('fa-IR')}</p>
             </div>
-          </div>
+            <b className={item.balance > 0 ? 'debtText' : 'payText'}>
+              {item.balance.toLocaleString('fa-IR')} تومان
+            </b>
+            <button className="editBtn" onClick={(e) => { e.stopPropagation(); renameCustomer(item.name) }}>
+              ویرایش نام
+            </button>
+            <button className="danger" onClick={(e) => { e.stopPropagation(); removeCustomer(item.name) }}>
+              حذف مشتری
+            </button>
+          </button>
         ))}
       </div>
     </section>
@@ -306,13 +261,9 @@ function CustomerDetails({ name, onBack }: { name: string; onBack: () => void })
   const [editAmount, setEditAmount] = useState('')
   const [editDescription, setEditDescription] = useState('')
 
-  useEffect(() => {
-    load()
-  }, [name])
+  useEffect(() => { load() }, [])
 
   async function load() {
-    setLoading(true)
-
     const { data } = await supabase
       .from('transactions')
       .select('*')
@@ -323,8 +274,8 @@ function CustomerDetails({ name, onBack }: { name: string; onBack: () => void })
     setLoading(false)
   }
 
-  const debt = items.filter(i => i.type === 'debt').reduce((s, i) => s + Number(i.amount), 0)
-  const payment = items.filter(i => i.type === 'payment').reduce((s, i) => s + Number(i.amount), 0)
+  const debt = items.filter(i => i.type === 'debt').reduce((s, i) => s + i.amount, 0)
+  const payment = items.filter(i => i.type === 'payment').reduce((s, i) => s + i.amount, 0)
   const balance = debt - payment
 
   function startEdit(item: Tx) {
@@ -340,7 +291,7 @@ function CustomerDetails({ name, onBack }: { name: string; onBack: () => void })
       .from('transactions')
       .update({
         amount: Number(editAmount.replaceAll(',', '').trim()),
-        description: editDescription,
+        description: editDescription
       })
       .eq('id', editingTx.id)
 
@@ -371,14 +322,12 @@ function CustomerDetails({ name, onBack }: { name: string; onBack: () => void })
 
   return (
     <section className="form">
-      <button className="back small" onClick={onBack}>بازگشت به مشتری‌ها</button>
-
+      <button className="back small" onClick={onBack}>برگشت به مشتری‌ها</button>
       <h2>{name}</h2>
-
       <div className="summary">
-        <p>جمع بدهی: {money(debt)}</p>
-        <p>جمع پرداخت: {money(payment)}</p>
-        <h3>مانده: {money(balance)}</h3>
+        <p>جمع بدهی: {debt.toLocaleString('fa-IR')} تومان</p>
+        <p>جمع پرداخت: {payment.toLocaleString('fa-IR')} تومان</p>
+        <h3>مانده: {balance.toLocaleString('fa-IR')} تومان</h3>
       </div>
 
       {editingTx && (
@@ -392,7 +341,6 @@ function CustomerDetails({ name, onBack }: { name: string; onBack: () => void })
       )}
 
       {loading && <p>در حال دریافت...</p>}
-
       <div className="list">
         {items.map(item => (
           <div className="row" key={item.id}>
@@ -400,16 +348,12 @@ function CustomerDetails({ name, onBack }: { name: string; onBack: () => void })
               <strong>{item.type === 'debt' ? 'بدهی' : 'پرداخت'}</strong>
               <p>{item.description || 'بدون شرح'}</p>
             </div>
-
             <div>
               <b className={item.type === 'debt' ? 'debtText' : 'payText'}>
-                {item.type === 'debt' ? '+' : '-'} {money(item.amount)}
+                {item.type === 'debt' ? '+' : '-'} {item.amount.toLocaleString('fa-IR')} تومان
               </b>
-
-              <div className="actions">
-                <button className="editBtn" onClick={() => startEdit(item)}>ویرایش</button>
-                <button className="danger" onClick={() => removeTransaction(item.id)}>حذف</button>
-              </div>
+              <button className="editBtn" onClick={() => startEdit(item)}>ویرایش</button>
+              <button className="danger" onClick={() => removeTransaction(item.id)}>حذف</button>
             </div>
           </div>
         ))}
@@ -419,19 +363,12 @@ function CustomerDetails({ name, onBack }: { name: string; onBack: () => void })
 }
 
 function History({ title }: { title: string }) {
-  const [filter, setFilter] = useState<'all' | 'today'>('all')
+  const [filter, setFilter] = useState('all')
   const [items, setItems] = useState<Tx[]>([])
-
-  useEffect(() => {
-    load()
-  }, [filter])
+  useEffect(() => { load() }, [])
 
   async function load() {
-    let query = supabase
-      .from('transactions')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(100)
+    let query = supabase.from('transactions').select('*').order('created_at', { ascending: false }).limit(100)
 
     if (filter === 'today') {
       const start = new Date()
@@ -443,22 +380,24 @@ function History({ title }: { title: string }) {
     setItems(data || [])
   }
 
-  const debt = items.filter(i => i.type === 'debt').reduce((s, i) => s + Number(i.amount), 0)
-  const payment = items.filter(i => i.type === 'payment').reduce((s, i) => s + Number(i.amount), 0)
-
   return (
     <section className="form">
       <h2>{title}</h2>
 
       <div className="filterRow">
-        <button className={filter === 'all' ? 'activeFilter' : ''} onClick={() => setFilter('all')}>همه</button>
-        <button className={filter === 'today' ? 'activeFilter' : ''} onClick={() => setFilter('today')}>امروز</button>
-      </div>
+        <button
+          className={filter === 'all' ? 'activeFilter' : ''}
+          onClick={() => { setFilter('all'); setTimeout(load, 0) }}
+        >
+          همه
+        </button>
 
-      <div className="summary">
-        <p>بدهی: {money(debt)}</p>
-        <p>پرداخت: {money(payment)}</p>
-        <h3>مانده: {money(debt - payment)}</h3>
+        <button
+          className={filter === 'today' ? 'activeFilter' : ''}
+          onClick={() => { setFilter('today'); setTimeout(load, 0) }}
+        >
+          امروز
+        </button>
       </div>
 
       <div className="list">
@@ -468,9 +407,8 @@ function History({ title }: { title: string }) {
               <strong>{item.customer_name}</strong>
               <p>{item.description || (item.type === 'debt' ? 'بدهی' : 'پرداخت')}</p>
             </div>
-
             <b className={item.type === 'debt' ? 'debtText' : 'payText'}>
-              {item.type === 'debt' ? '+' : '-'} {money(item.amount)}
+              {item.type === 'debt' ? '+' : '-'} {item.amount.toLocaleString('fa-IR')} تومان
             </b>
           </div>
         ))}
