@@ -207,3 +207,26 @@ button {
   color: #9ca3af;
 }
 
+
+.topUserBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  background: #ffffff;
+  color: #374151;
+  padding: 10px 14px;
+  border-radius: 16px;
+  margin: 10px;
+  box-shadow: 0 6px 16px rgba(0,0,0,.06);
+  font-size: 14px;
+}
+
+.topUserBar button {
+  border: 0;
+  border-radius: 12px;
+  background: #fee2e2;
+  color: #dc2626;
+  padding: 8px 12px;
+  font-weight: bold;
+}
