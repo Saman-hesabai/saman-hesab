@@ -230,3 +230,166 @@ button {
   padding: 8px 12px;
   font-weight: bold;
 }
+
+.authCard {
+  margin-top: 40px;
+  background: rgba(255,255,255,.92);
+  padding: 22px;
+  border-radius: 24px;
+  box-shadow: 0 16px 36px rgba(15,23,42,.08);
+}
+
+.authMessage {
+  color: #475569;
+  line-height: 1.9;
+}
+
+.textButton {
+  border: 0;
+  background: transparent;
+  color: #2563eb;
+  font-weight: 700;
+  padding: 12px;
+}
+
+.aboutCard {
+  grid-column: 1 / -1;
+  background: #ecfeff;
+  color: #0891b2;
+  min-height: 96px;
+}
+
+.aboutPage {
+  text-align: center;
+}
+
+.aboutLogo {
+  width: 76px;
+  height: 76px;
+  border-radius: 24px;
+  display: grid;
+  place-items: center;
+  margin: 8px auto 16px;
+  background: #10b981;
+  color: white;
+  font-size: 42px;
+  font-weight: 900;
+}
+
+.linkBtn {
+  display: inline-block;
+  text-decoration: none;
+}
+
+.copyright {
+  margin-top: 28px;
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+.suggestBox {
+  position: relative;
+  z-index: 20;
+}
+
+.suggestList {
+  position: absolute;
+  top: calc(100% - 8px);
+  right: 0;
+  left: 0;
+  display: grid;
+  max-height: 260px;
+  overflow-y: auto;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 16px 36px rgba(15,23,42,.16);
+  padding: 8px;
+  z-index: 50;
+}
+
+.suggestList button {
+  border: 0;
+  background: transparent;
+  text-align: right;
+  padding: 12px 14px;
+  border-radius: 12px;
+  font-size: 16px;
+  color: #111827;
+}
+
+.suggestList button:active,
+.suggestList button:hover {
+  background: #ecfdf5;
+}
+
+.customerClickable {
+  width: 100%;
+  border: 0;
+  text-align: right;
+  background: white;
+  color: #111827;
+  border-radius: 22px;
+  padding: 16px;
+  box-shadow: 0 10px 25px rgba(0,0,0,.06);
+}
+
+.customerTitle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.customerClickable small,
+.customerClickable em {
+  display: block;
+  margin-top: 6px;
+  color: #64748b;
+  font-style: normal;
+}
+
+.customerClickable em {
+  color: #10b981;
+  font-size: 13px;
+}
+
+.customerEditBox {
+  background: white;
+  border-radius: 22px;
+  padding: 18px;
+  margin: 16px 0;
+  box-shadow: 0 10px 25px rgba(0,0,0,.06);
+}
+
+.voiceBox {
+  margin: 8px auto 18px;
+  max-width: 520px;
+  text-align: center;
+}
+
+.voiceBtn {
+  border: 0;
+  border-radius: 18px;
+  padding: 12px 18px;
+  font-size: 16px;
+  font-weight: bold;
+  background: #111827;
+  color: white;
+}
+
+.activeVoice {
+  background: #10b981;
+}
+
+.voiceBox p {
+  color: #6b7280;
+  font-size: 14px;
+  margin-top: 8px;
+  line-height: 1.8;
+}
+
+button:disabled {
+  opacity: .6;
+  cursor: wait;
+}

@@ -1,12 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import '../App.css'
 
-type Page = 'home' | 'debt' | 'payment' | 'customers' | 'today'
+type Page = 'home' | 'debt' | 'payment' | 'customers' | 'today' | 'about'
 type TxType = 'debt' | 'payment'
 
 type Tx = {
   id: string
+  customer_id: string | null
   customer_name: string
   type: TxType
   amount: number
@@ -14,42 +15,124 @@ type Tx = {
   created_at: string
 }
 
-type CustomerBalance = {
+type Customer = {
+  id: string
   name: string
+}
+
+type CustomerBalance = Customer & {
   debt: number
   payment: number
   balance: number
 }
 
-function getStoreId() {
-  return localStorage.getItem('store_id') || ''
+type ParsedVoiceCommand = {
+  type: TxType
+  amount: number
+  customerName: string
+  description: string
 }
 
-const money = (n: number) => n.toLocaleString('fa-IR') + ' تومان'
+const VERSION = '0.8.0'
+
+function getStoreId() {
+  const id = localStorage.getItem('store_id')
+  if (!id) throw new Error('شناسه فروشگاه پیدا نشد. یک بار خارج و دوباره وارد شوید.')
+  return id
+}
+
+function normalizeText(value: string) {
+  return value
+    .replaceAll('ي', 'ی')
+    .replaceAll('ك', 'ک')
+    .replaceAll('ۀ', 'ه')
+    .replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
+    .replace(/[٬,]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function compactText(value: string) {
+  return normalizeText(value).replace(/\s/g, '')
+}
+
+function money(value: number) {
+  return Number(value || 0).toLocaleString('fa-IR') + ' تومان'
+}
+
+function parsePersianNumber(input: string) {
+  const normalized = normalizeText(input)
+  const digitMatch = normalized.match(/\d+(?:\.\d+)?/)
+  if (digitMatch) {
+    let number = Number(digitMatch[0])
+    const after = normalized.slice(digitMatch.index || 0)
+    if (/میلیون/.test(after)) number *= 1_000_000
+    else if (/هزار/.test(after)) number *= 1_000
+    return Math.round(number)
+  }
+
+  const small: Record<string, number> = {
+    صفر: 0, یک: 1, یه: 1, دو: 2, سه: 3, چهار: 4, پنج: 5, شش: 6, هفت: 7, هشت: 8, نه: 9,
+    ده: 10, یازده: 11, دوازده: 12, سیزده: 13, چهارده: 14, پانزده: 15, شانزده: 16,
+    هفده: 17, هجده: 18, نوزده: 19, بیست: 20, سی: 30, چهل: 40, پنجاه: 50,
+    شصت: 60, هفتاد: 70, هشتاد: 80, نود: 90, صد: 100, یکصد: 100,
+    دویست: 200, سیصد: 300, چهارصد: 400, پانصد: 500, ششصد: 600, هفتصد: 700,
+    هشتصد: 800, نهصد: 900
+  }
+
+  const tokens = normalized.split(' ')
+  let total = 0
+  let current = 0
+  let found = false
+
+  for (const token of tokens) {
+    if (token === 'و') continue
+    if (token in small) {
+      current += small[token]
+      found = true
+    } else if (token === 'هزار') {
+      current = (current || 1) * 1_000
+      total += current
+      current = 0
+      found = true
+    } else if (token === 'میلیون') {
+      current = (current || 1) * 1_000_000
+      total += current
+      current = 0
+      found = true
+    }
+  }
+
+  return found ? total + current : 0
+}
 
 function App() {
   const [page, setPage] = useState<Page>('home')
   const [stats, setStats] = useState({ customers: 0, debt: 0, payment: 0, balance: 0 })
-  const [selectedCustomer, setSelectedCustomer] = useState<string | null>(null)
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
 
   async function loadStats() {
-    const { data } = await supabase.from('transactions').select('customer_name,type,amount').eq('store_id', getStoreId())
-    const names = new Set<string>()
-    let debt = 0
-    let payment = 0
+    try {
+      const storeId = getStoreId()
+      const [{ data: customers }, { data: transactions }] = await Promise.all([
+        supabase.from('customers').select('id').eq('store_id', storeId),
+        supabase.from('transactions').select('type,amount').eq('store_id', storeId)
+      ])
 
-    ;(data || []).forEach((tx: any) => {
-      names.add(tx.customer_name)
-      if (tx.type === 'debt') debt += Number(tx.amount)
-      if (tx.type === 'payment') payment += Number(tx.amount)
-    })
+      let debt = 0
+      let payment = 0
+      ;(transactions || []).forEach((tx: any) => {
+        if (tx.type === 'debt') debt += Number(tx.amount)
+        if (tx.type === 'payment') payment += Number(tx.amount)
+      })
 
-    setStats({ customers: names.size, debt, payment, balance: debt - payment })
+      setStats({ customers: customers?.length || 0, debt, payment, balance: debt - payment })
+    } catch (error: any) {
+      console.error(error)
+    }
   }
 
-  useEffect(() => {
-    loadStats()
-  }, [])
+  useEffect(() => { loadStats() }, [])
 
   function goHome() {
     setPage('home')
@@ -82,67 +165,56 @@ function App() {
             <button className="card green" onClick={() => setPage('payment')}>ثبت پرداخت</button>
             <button className="card blue" onClick={() => setPage('customers')}>مشتری‌ها</button>
             <button className="card purple" onClick={() => setPage('today')}>امروز</button>
+            <button className="card aboutCard" onClick={() => setPage('about')}>درباره برنامه</button>
           </section>
         </>
       )}
 
       {page === 'debt' && <TransactionForm title="ثبت بدهی جدید" type="debt" onSaved={loadStats} />}
       {page === 'payment' && <TransactionForm title="ثبت پرداخت جدید" type="payment" onSaved={loadStats} />}
-
-      {page === 'customers' && !selectedCustomer && (
-        <Customers onSelect={setSelectedCustomer} />
-      )}
-
+      {page === 'customers' && !selectedCustomer && <Customers onSelect={setSelectedCustomer} />}
       {page === 'customers' && selectedCustomer && (
-        <CustomerDetails name={selectedCustomer} onBack={() => setSelectedCustomer(null)} onChanged={loadStats} />
+        <CustomerDetails customer={selectedCustomer} onBack={() => setSelectedCustomer(null)} onChanged={loadStats} />
       )}
-
       {page === 'today' && <History title="گزارش امروز" onlyToday />}
+      {page === 'about' && <AboutPage />}
     </main>
   )
 }
 
-function CustomerNameInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const [customers, setCustomers] = useState<string[]>([])
+function CustomerNameInput({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const [customers, setCustomers] = useState<Customer[]>([])
   const [show, setShow] = useState(false)
 
   useEffect(() => {
-    async function load() {
-      const { data } = await supabase.from('customers').select('name').eq('store_id', getStoreId()).order('name')
-      setCustomers((data || []).map((x: any) => x.name))
-    }
-    load()
+    supabase
+      .from('customers')
+      .select('id,name')
+      .eq('store_id', getStoreId())
+      .order('name')
+      .then(({ data }) => setCustomers((data || []) as Customer[]))
   }, [])
 
-  const q = value.trim()
-  const list = customers
-    .filter(name => !q || name.includes(q))
-    .slice(0, 8)
+  const query = compactText(value)
+  const suggestions = customers
+    .filter(customer => !query || compactText(customer.name).includes(query))
+    .slice(0, 10)
 
   return (
     <div className="suggestBox">
       <input
         value={value}
-        onChange={e => {
-          onChange(e.target.value)
-          setShow(true)
-        }}
+        onChange={event => { onChange(event.target.value); setShow(true) }}
         onFocus={() => setShow(true)}
+        onBlur={() => window.setTimeout(() => setShow(false), 150)}
         placeholder="نام مشتری"
+        autoComplete="off"
       />
-
-      {show && list.length > 0 && (
+      {show && suggestions.length > 0 && (
         <div className="suggestList">
-          {list.map(name => (
-            <button
-              key={name}
-              type="button"
-              onClick={() => {
-                onChange(name)
-                setShow(false)
-              }}
-            >
-              {name}
+          {suggestions.map(customer => (
+            <button key={customer.id} type="button" onMouseDown={() => { onChange(customer.name); setShow(false) }}>
+              {customer.name}
             </button>
           ))}
         </div>
@@ -156,185 +228,230 @@ function TransactionForm({ title, type, onSaved }: { title: string; type: TxType
   const [amount, setAmount] = useState('')
   const [description, setDescription] = useState('')
   const [message, setMessage] = useState('')
+  const [saving, setSaving] = useState(false)
 
   async function save() {
-    const cleanName = name.trim()
-    const cleanAmount = Number(amount.replaceAll(',', '').trim())
+    const cleanName = normalizeText(name)
+    const cleanAmount = Number(normalizeText(amount))
+    if (!cleanName || !cleanAmount || cleanAmount <= 0) return setMessage('نام مشتری و مبلغ معتبر را وارد کنید.')
 
-    if (!cleanName || !cleanAmount) {
-      setMessage('نام مشتری و مبلغ را وارد کن')
-      return
-    }
+    setSaving(true)
+    setMessage('در حال ثبت...')
+    const storeId = getStoreId()
 
     const { data: customer, error: customerError } = await supabase
       .from('customers')
-      .upsert({ name: cleanName, store_id: getStoreId() }, { onConflict: 'store_id,name' })
-      .select()
+      .upsert({ name: cleanName, store_id: storeId }, { onConflict: 'store_id,name' })
+      .select('id,name')
       .single()
 
     if (customerError || !customer) {
-      setMessage('خطا در ثبت مشتری: ' + (customerError?.message || 'store_id پیدا نشد'))
-      return
+      setSaving(false)
+      return setMessage('خطا در ثبت مشتری: ' + (customerError?.message || 'خطای نامشخص'))
     }
 
     const { error } = await supabase.from('transactions').insert({
       customer_id: customer.id,
-      customer_name: cleanName,
-      store_id: getStoreId(),
+      customer_name: customer.name,
+      store_id: storeId,
       type,
       amount: cleanAmount,
       description: description.trim() || null
     })
 
-    if (error) setMessage('خطا: ' + error.message)
-    else {
-      setMessage('ثبت شد ✅')
-      setName('')
-      setAmount('')
-      setDescription('')
-      onSaved()
-    }
+    setSaving(false)
+    if (error) return setMessage('خطا: ' + error.message)
+
+    setMessage('ثبت شد ✅')
+    setName('')
+    setAmount('')
+    setDescription('')
+    onSaved()
   }
 
   return (
     <section className="form">
       <h2>{title}</h2>
-
       <CustomerNameInput value={name} onChange={setName} />
-
-      <input
-        value={amount}
-        onChange={e => setAmount(e.target.value)}
-        placeholder="مبلغ"
-        inputMode="numeric"
-      />
-
-      <input
-        value={description}
-        onChange={e => setDescription(e.target.value)}
-        placeholder="شرح"
-      />
-
-      <button className="save" onClick={save}>ثبت</button>
+      <input value={amount} onChange={e => setAmount(e.target.value)} placeholder="مبلغ" inputMode="numeric" />
+      <input value={description} onChange={e => setDescription(e.target.value)} placeholder="شرح اقلام یا توضیحات" />
+      <button className="save" disabled={saving} onClick={save}>{saving ? 'در حال ثبت...' : 'ثبت'}</button>
       {message && <p>{message}</p>}
     </section>
   )
 }
 
-function Customers({ onSelect }: { onSelect: (name: string) => void }) {
+function Customers({ onSelect }: { onSelect: (customer: Customer) => void }) {
   const [items, setItems] = useState<CustomerBalance[]>([])
   const [search, setSearch] = useState('')
 
   async function load() {
-    const { data } = await supabase.from('transactions').select('customer_name,type,amount').eq('store_id', getStoreId())
-    const map = new Map<string, CustomerBalance>()
+    const storeId = getStoreId()
+    const [{ data: customers }, { data: transactions }] = await Promise.all([
+      supabase.from('customers').select('id,name').eq('store_id', storeId).order('name'),
+      supabase.from('transactions').select('customer_id,customer_name,type,amount').eq('store_id', storeId)
+    ])
 
-    ;(data || []).forEach((tx: any) => {
-      const name = tx.customer_name
-      if (!map.has(name)) map.set(name, { name, debt: 0, payment: 0, balance: 0 })
-      const item = map.get(name)!
-      if (tx.type === 'debt') item.debt += Number(tx.amount)
-      if (tx.type === 'payment') item.payment += Number(tx.amount)
-      item.balance = item.debt - item.payment
+    const map = new Map<string, CustomerBalance>()
+    ;(customers || []).forEach((customer: any) => map.set(customer.id, { ...customer, debt: 0, payment: 0, balance: 0 }))
+    ;(transactions || []).forEach((tx: any) => {
+      const key = tx.customer_id || tx.customer_name
+      let customer = map.get(key)
+      if (!customer) {
+        customer = { id: key, name: tx.customer_name, debt: 0, payment: 0, balance: 0 }
+        map.set(key, customer)
+      }
+      if (tx.type === 'debt') customer.debt += Number(tx.amount)
+      if (tx.type === 'payment') customer.payment += Number(tx.amount)
+      customer.balance = customer.debt - customer.payment
     })
 
     setItems([...map.values()].sort((a, b) => b.balance - a.balance))
   }
 
-  useEffect(() => {
-    load()
-  }, [])
+  useEffect(() => { load() }, [])
+
+  const filtered = useMemo(() => {
+    const query = compactText(search)
+    return items.filter(item => compactText(item.name).includes(query))
+  }, [items, search])
 
   return (
     <section className="form">
       <h2>مشتری‌ها</h2>
-
-      <input
-        value={search}
-        onChange={e => setSearch(e.target.value)}
-        placeholder="جستجوی مشتری..."
-      />
-
+      <input value={search} onChange={e => setSearch(e.target.value)} placeholder="جستجوی مشتری..." />
       <div className="list">
-        {items.filter(x => x.name.includes(search.trim())).map(item => (
-          <div className="customerCard" key={item.name}>
-            <button className="rowButton" onClick={() => onSelect(item.name)}>
-              <strong>{item.name}</strong>
-              <span>{money(item.balance)}</span>
-              <small>بدهی: {money(item.debt)} | پرداخت: {money(item.payment)}</small>
-            </button>
-          </div>
+        {filtered.map(item => (
+          <button className="customerCard customerClickable" key={item.id} onClick={() => onSelect({ id: item.id, name: item.name })}>
+            <div className="customerTitle"><strong>{item.name}</strong><span>{money(item.balance)}</span></div>
+            <small>بدهی: {money(item.debt)} | پرداخت: {money(item.payment)}</small>
+            <em>برای مشاهده و ویرایش حساب لمس کنید</em>
+          </button>
         ))}
       </div>
     </section>
   )
 }
 
-function CustomerDetails({ name, onBack, onChanged }: { name: string; onBack: () => void; onChanged: () => void }) {
+function CustomerDetails({ customer, onBack, onChanged }: { customer: Customer; onBack: () => void; onChanged: () => void }) {
   const [items, setItems] = useState<Tx[]>([])
-  const [newName, setNewName] = useState(name)
+  const [newName, setNewName] = useState(customer.name)
+  const [editing, setEditing] = useState<Tx | null>(null)
+  const [editAmount, setEditAmount] = useState('')
+  const [editDescription, setEditDescription] = useState('')
+  const [message, setMessage] = useState('')
 
   async function load() {
     const { data } = await supabase
       .from('transactions')
       .select('*')
       .eq('store_id', getStoreId())
-      .eq('customer_name', name).eq('store_id', getStoreId())
+      .eq('customer_id', customer.id)
       .order('created_at', { ascending: false })
-
     setItems((data || []) as Tx[])
   }
 
-  useEffect(() => {
-    load()
-  }, [name])
+  useEffect(() => { load() }, [customer.id])
 
-  const debt = items.filter(x => x.type === 'debt').reduce((s, x) => s + Number(x.amount), 0)
-  const payment = items.filter(x => x.type === 'payment').reduce((s, x) => s + Number(x.amount), 0)
+  const debt = items.filter(x => x.type === 'debt').reduce((sum, x) => sum + Number(x.amount), 0)
+  const payment = items.filter(x => x.type === 'payment').reduce((sum, x) => sum + Number(x.amount), 0)
 
   async function rename() {
-    const clean = newName.trim()
-    if (!clean) return
+    const clean = normalizeText(newName)
+    if (!clean || clean === customer.name) return
+    const storeId = getStoreId()
 
-    await supabase.from('customers').upsert({ name: clean, store_id: getStoreId() }, { onConflict: 'store_id,name' })
-    await supabase.from('transactions').update({ customer_name: clean }).eq('customer_name', name).eq('store_id', getStoreId())
+    const { error } = await supabase.from('customers').update({ name: clean }).eq('id', customer.id).eq('store_id', storeId)
+    if (error) return setMessage('خطا در ویرایش نام: ' + error.message)
 
+    await supabase.from('transactions').update({ customer_name: clean }).eq('customer_id', customer.id).eq('store_id', storeId)
+    setMessage('نام مشتری ویرایش شد ✅')
+    onChanged()
+    window.setTimeout(onBack, 500)
+  }
+
+  async function removeCustomer() {
+    if (!confirm('این مشتری و همه تراکنش‌های او حذف شود؟')) return
+    const storeId = getStoreId()
+    await supabase.from('transactions').delete().eq('customer_id', customer.id).eq('store_id', storeId)
+    await supabase.from('customers').delete().eq('id', customer.id).eq('store_id', storeId)
     onChanged()
     onBack()
   }
 
-  async function removeCustomer() {
-    if (!confirm('همه تراکنش‌های این مشتری حذف شود؟')) return
-    await supabase.from('transactions').delete().eq('customer_name', name).eq('store_id', getStoreId())
+  function startEdit(item: Tx) {
+    setEditing(item)
+    setEditAmount(String(item.amount))
+    setEditDescription(item.description || '')
+  }
+
+  async function saveEdit() {
+    if (!editing) return
+    const amount = Number(normalizeText(editAmount))
+    if (!amount || amount <= 0) return setMessage('مبلغ معتبر وارد کنید.')
+
+    const { error } = await supabase
+      .from('transactions')
+      .update({ amount, description: editDescription.trim() || null })
+      .eq('id', editing.id)
+      .eq('store_id', getStoreId())
+
+    if (error) return setMessage('خطا در ویرایش تراکنش: ' + error.message)
+    setEditing(null)
+    setMessage('تراکنش ویرایش شد ✅')
+    await load()
     onChanged()
-    onBack()
+  }
+
+  async function removeTransaction(item: Tx) {
+    if (!confirm('این تراکنش حذف شود؟')) return
+    const { error } = await supabase.from('transactions').delete().eq('id', item.id).eq('store_id', getStoreId())
+    if (error) return setMessage('خطا در حذف تراکنش: ' + error.message)
+    await load()
+    onChanged()
   }
 
   return (
     <section className="form">
-      <h2>{name}</h2>
+      <button className="back small" onClick={onBack}>برگشت به مشتری‌ها</button>
+      <h2>{customer.name}</h2>
       <div className="summary">
-        <p>بدهی: {money(debt)}</p>
-        <p>پرداخت: {money(payment)}</p>
-        <h3>مانده: {money(debt - payment)}</h3>
+        <p>جمع بدهی: {money(debt)}</p><p>جمع پرداخت: {money(payment)}</p><h3>مانده: {money(debt - payment)}</h3>
       </div>
 
-      <input value={newName} onChange={e => setNewName(e.target.value)} />
-      <button className="save" onClick={rename}>ویرایش نام</button>
-      <button className="danger" onClick={removeCustomer}>حذف مشتری</button>
+      <div className="customerEditBox">
+        <h3>ویرایش اطلاعات مشتری</h3>
+        <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="نام و نام خانوادگی" />
+        <button className="save" onClick={rename}>ذخیره تغییرات مشتری</button>
+        <button className="danger" onClick={removeCustomer}>حذف مشتری</button>
+      </div>
 
-      <button className="back" onClick={onBack}>برگشت به لیست</button>
+      {editing && (
+        <div className="editBox">
+          <h3>ویرایش تراکنش</h3>
+          <input value={editAmount} onChange={e => setEditAmount(e.target.value)} placeholder="مبلغ" inputMode="numeric" />
+          <input value={editDescription} onChange={e => setEditDescription(e.target.value)} placeholder="شرح" />
+          <button className="save" onClick={saveEdit}>ذخیره ویرایش</button>
+          <button className="back small" onClick={() => setEditing(null)}>لغو</button>
+        </div>
+      )}
 
+      {message && <p>{message}</p>}
       <div className="list">
         {items.map(item => (
           <div className="row" key={item.id}>
             <div>
               <strong>{item.type === 'debt' ? 'بدهی' : 'پرداخت'}</strong>
               <p>{item.description || 'بدون شرح'}</p>
+              <small>{new Date(item.created_at).toLocaleString('fa-IR')}</small>
             </div>
-            <b className={item.type === 'debt' ? 'debtText' : 'payText'}>
-              {item.type === 'debt' ? '+' : '-'} {money(item.amount)}
-            </b>
+            <div>
+              <b className={item.type === 'debt' ? 'debtText' : 'payText'}>{item.type === 'debt' ? '+' : '-'} {money(item.amount)}</b>
+              <div className="actions">
+                <button className="editBtn" onClick={() => startEdit(item)}>ویرایش</button>
+                <button className="danger" onClick={() => removeTransaction(item)}>حذف</button>
+              </div>
+            </div>
           </div>
         ))}
       </div>
@@ -345,46 +462,27 @@ function CustomerDetails({ name, onBack, onChanged }: { name: string; onBack: ()
 function History({ title, onlyToday }: { title: string; onlyToday?: boolean }) {
   const [items, setItems] = useState<Tx[]>([])
 
-  async function load() {
+  useEffect(() => {
     let query = supabase.from('transactions').select('*').eq('store_id', getStoreId()).order('created_at', { ascending: false })
-
     if (onlyToday) {
-      const today = new Date()
-      today.setHours(0, 0, 0, 0)
+      const today = new Date(); today.setHours(0, 0, 0, 0)
       query = query.gte('created_at', today.toISOString())
     }
+    query.then(({ data }) => setItems((data || []) as Tx[]))
+  }, [onlyToday])
 
-    const { data } = await query
-    setItems((data || []) as Tx[])
-  }
-
-  useEffect(() => {
-    load()
-  }, [])
-
-  const debt = items.filter(x => x.type === 'debt').reduce((s, x) => s + Number(x.amount), 0)
-  const payment = items.filter(x => x.type === 'payment').reduce((s, x) => s + Number(x.amount), 0)
+  const debt = items.filter(x => x.type === 'debt').reduce((sum, x) => sum + Number(x.amount), 0)
+  const payment = items.filter(x => x.type === 'payment').reduce((sum, x) => sum + Number(x.amount), 0)
 
   return (
     <section className="form">
       <h2>{title}</h2>
-
-      <div className="summary">
-        <p>بدهی: {money(debt)}</p>
-        <p>پرداخت: {money(payment)}</p>
-        <h3>مانده: {money(debt - payment)}</h3>
-      </div>
-
+      <div className="summary"><p>بدهی: {money(debt)}</p><p>پرداخت: {money(payment)}</p><h3>مانده: {money(debt - payment)}</h3></div>
       <div className="list">
         {items.map(item => (
           <div className="row" key={item.id}>
-            <div>
-              <strong>{item.customer_name}</strong>
-              <p>{item.description || (item.type === 'debt' ? 'بدهی' : 'پرداخت')}</p>
-            </div>
-            <b className={item.type === 'debt' ? 'debtText' : 'payText'}>
-              {item.type === 'debt' ? '+' : '-'} {money(item.amount)}
-            </b>
+            <div><strong>{item.customer_name}</strong><p>{item.description || (item.type === 'debt' ? 'بدهی' : 'پرداخت')}</p><small>{new Date(item.created_at).toLocaleString('fa-IR')}</small></div>
+            <b className={item.type === 'debt' ? 'debtText' : 'payText'}>{item.type === 'debt' ? '+' : '-'} {money(item.amount)}</b>
           </div>
         ))}
       </div>
@@ -392,140 +490,131 @@ function History({ title, onlyToday }: { title: string; onlyToday?: boolean }) {
   )
 }
 
+function AboutPage() {
+  return (
+    <section className="form aboutPage">
+      <div className="aboutLogo">ح</div>
+      <h2>سامان حساب</h2>
+      <p>دفتر هوشمند مدیریت حساب مشتریان و فروشگاه‌ها</p>
+      <div className="summary">
+        <p>نسخه: <b>{VERSION}</b></p>
+        <p>توسعه و طراحی</p>
+        <h3>سامان رفیعی</h3>
+        <p>شماره تماس: <b>۰۹۳۹۷۱۸۵۲۰۵</b></p>
+      </div>
+      <a className="save linkBtn" href="tel:09397185205">تماس با توسعه‌دهنده</a>
+      <button className="editBtn" onClick={() => window.location.reload()}>بررسی بروزرسانی</button>
+      <p className="copyright">تمام حقوق این نرم‌افزار متعلق به سامان رفیعی است.</p>
+    </section>
+  )
+}
+
 let voiceRecognition: any = null
 
-function VoiceAssistant({ setPage, loadStats }: { setPage: (p: Page) => void; loadStats: () => void }) {
+function VoiceAssistant({ setPage, loadStats }: { setPage: (page: Page) => void; loadStats: () => void }) {
   const [listening, setListening] = useState(false)
   const [message, setMessage] = useState('فرمان صوتی خاموش است')
 
-  function normalize(v: string) {
-    return v
-      .replaceAll('ي', 'ی')
-      .replaceAll('ك', 'ک')
-      .replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
-      .trim()
+  async function loadCustomers() {
+    const { data } = await supabase.from('customers').select('id,name').eq('store_id', getStoreId())
+    return (data || []) as Customer[]
   }
 
-  function getAmount(text: string) {
-    const n = normalize(text)
-    const match = n.match(/\d+/)
-    let amount = match ? Number(match[0]) : 0
-    if (!amount && n.includes('بیست')) amount = 20
-    if (!amount && n.includes('پنجاه')) amount = 50
-    if (!amount && n.includes('صد')) amount = 100
-    if (!amount) return 0
-    if (n.includes('میلیون')) amount *= 1000000
-    else if (n.includes('هزار')) amount *= 1000
-    return amount
+  function findCustomerName(text: string, customers: Customer[]) {
+    const normalized = compactText(text)
+    const matched = [...customers]
+      .sort((a, b) => b.name.length - a.name.length)
+      .find(customer => normalized.includes(compactText(customer.name)))
+    if (matched) return matched.name
+
+    const cueMatch = normalizeText(text).match(/(?:برای|به حساب|حساب|از)\s+(.+?)(?=\s+(?:مبلغ|\d|یک|دو|سه|چهار|پنج|شش|هفت|هشت|نه|ده|بیست|سی|چهل|پنجاه|صد|هزار|میلیون|بدهی|پرداخت|نسیه|ثبت|اضافه|کم)|$)/)
+    if (cueMatch?.[1]) return cueMatch[1].trim()
+
+    return ''
   }
 
-  function getName(text: string) {
-    return normalize(text)
-      .replace(/سامان|برای|از|به|حساب|بدهی|نسیه|پرداخت|دریافت|گرفتم|داد|ثبت|کن|کرد|تومان|هزار|میلیون|اضافه/g, ' ')
-      .replace(/\d+/g, ' ')
-      .replace(/بیست|پنجاه|صد/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
+  async function parseCommand(raw: string): Promise<ParsedVoiceCommand | null> {
+    const text = normalizeText(raw)
+    if (!text.includes('حسابدار')) return null
+
+    const paymentWords = /پرداخت|تسویه|دریافت|گرفتم|واریز|داد|کم کن|کم شود/
+    const debtWords = /بدهی|نسیه|برد|خرید|اضافه کن|اضافه شود|ثبت کن/
+    const type: TxType = paymentWords.test(text) ? 'payment' : debtWords.test(text) ? 'debt' : 'debt'
+    const amount = parsePersianNumber(text)
+    const customers = await loadCustomers()
+    const customerName = findCustomerName(text, customers)
+
+    if (!amount || !customerName) return null
+    const timestamp = new Date().toLocaleString('fa-IR')
+    return { type, amount, customerName, description: `فرمان صوتی: ${raw.trim()} | ${timestamp}` }
   }
 
-  async function saveVoice(type: TxType, name: string, amount: number) {
-    const { data: customer, error: customerError } = await supabase
-      .from('customers')
-      .upsert({ name, store_id: getStoreId() }, { onConflict: 'store_id,name' })
-      .select()
-      .single()
+  async function saveVoice(command: ParsedVoiceCommand) {
+    const storeId = getStoreId()
+    const customers = await loadCustomers()
+    const existing = customers.find(customer => compactText(customer.name) === compactText(command.customerName))
 
-    if (customerError || !customer) {
-      setMessage('خطا در ساخت مشتری: ' + (customerError?.message || 'store_id پیدا نشد'))
-      return
+    let customer = existing
+    if (!customer) {
+      const { data, error } = await supabase
+        .from('customers')
+        .upsert({ name: normalizeText(command.customerName), store_id: storeId }, { onConflict: 'store_id,name' })
+        .select('id,name')
+        .single()
+      if (error || !data) return setMessage('خطا در ثبت مشتری: ' + (error?.message || 'نامشخص'))
+      customer = data as Customer
     }
 
     const { error } = await supabase.from('transactions').insert({
       customer_id: customer.id,
-      customer_name: name,
-      store_id: getStoreId(),
-      type,
-      amount,
-      description: 'ثبت با فرمان صوتی'
+      customer_name: customer.name,
+      store_id: storeId,
+      type: command.type,
+      amount: command.amount,
+      description: command.description
     })
 
-    if (error) setMessage('خطا: ' + error.message)
-    else {
-      setMessage(`${type === 'debt' ? 'بدهی' : 'پرداخت'} برای ${name} ثبت شد`)
-      loadStats()
-    }
+    if (error) return setMessage('خطا: ' + error.message)
+    setMessage(`${command.type === 'debt' ? 'بدهی' : 'پرداخت'} ${money(command.amount)} برای ${customer.name} ثبت شد ✅`)
+    loadStats()
   }
 
   async function handleCommand(raw: string) {
-    const text = normalize(raw)
-    if (!text.includes('سامان')) return
+    const text = normalizeText(raw)
+    if (!text.includes('حسابدار')) return
+    if (/گزارش|امروز/.test(text)) { setPage('today'); return setMessage('گزارش امروز باز شد') }
+    if (/مشتری/.test(text) && !/بدهی|پرداخت|نسیه|مبلغ|تومان|هزار|میلیون/.test(text)) { setPage('customers'); return setMessage('صفحه مشتری‌ها باز شد') }
 
-    if (text.includes('گزارش') || text.includes('امروز')) {
-      setPage('today')
-      setMessage('گزارش امروز باز شد')
-      return
-    }
-
-    if (text.includes('مشتری')) {
-      setPage('customers')
-      setMessage('صفحه مشتری‌ها باز شد')
-      return
-    }
-
-    const type: TxType | null =
-      text.includes('پرداخت') || text.includes('دریافت') || text.includes('گرفتم')
-        ? 'payment'
-        : text.includes('بدهی') || text.includes('نسیه') || text.includes('اضافه') || text.includes('حساب')
-          ? 'debt'
-          : null
-
-    const amount = getAmount(text)
-    const name = getName(text)
-
-    if (!type || !amount || !name) {
-      setMessage('فرمان کامل نبود. مثلا بگو: سامان به حساب اکبرعلی ۲۰ هزار اضافه کن')
-      return
-    }
-
-    await saveVoice(type, name, amount)
+    const parsed = await parseCommand(raw)
+    if (!parsed) return setMessage('فرمان کامل نبود. مثال: حسابدار صد هزار تومان پفک و چیپس برای رضا حیدروند ثبت کن')
+    await saveVoice(parsed)
   }
 
   function startVoice() {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-    if (!SpeechRecognition) {
-      alert('مرورگر شما فرمان صوتی را پشتیبانی نمی‌کند. با Chrome امتحان کن.')
-      return
-    }
+    if (!SpeechRecognition) return alert('مرورگر شما فرمان صوتی را پشتیبانی نمی‌کند. با Chrome امتحان کنید.')
 
     const recognition = new SpeechRecognition()
     voiceRecognition = recognition
     recognition.lang = 'fa-IR'
     recognition.continuous = true
     recognition.interimResults = false
-
-    recognition.onresult = (e: any) => {
-      const text = e.results[e.results.length - 1][0].transcript
+    recognition.onresult = (event: any) => {
+      const text = event.results[event.results.length - 1][0].transcript
       setMessage('شنیدم: ' + text)
       handleCommand(text)
     }
-
-    recognition.onend = () => {
-      if (voiceRecognition === recognition) {
-        try { recognition.start() } catch {}
-      }
-    }
-
+    recognition.onerror = (event: any) => setMessage('خطای میکروفون: ' + event.error)
+    recognition.onend = () => { if (voiceRecognition === recognition) try { recognition.start() } catch {} }
     recognition.start()
     setListening(true)
-    setMessage('گوش می‌دهم... اول بگو سامان')
+    setMessage('گوش می‌دهم... فرمان را با «حسابدار» شروع کنید')
   }
 
   function stopVoice() {
-    if (voiceRecognition) {
-      const r = voiceRecognition
-      voiceRecognition = null
-      try { r.stop() } catch {}
-    }
+    const current = voiceRecognition
+    voiceRecognition = null
+    if (current) try { current.stop() } catch {}
     setListening(false)
     setMessage('فرمان صوتی خاموش شد')
   }
